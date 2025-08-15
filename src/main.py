@@ -31,7 +31,9 @@ class DependencyContainer:
         """LLM 서비스 인스턴스 반환."""
         if "llm_service" not in self._instances:
             self._instances["llm_service"] = VLLMAdapter(
-                model_name=self.config["llm_model"]
+                model_name=self.config["llm_model"],
+                embedding_model=self.config.get("embedding_model", "bge-large:335m"),
+                base_url=self.config.get("vllm_base_url", "http://localhost:8000/v1")
             )
         return self._instances["llm_service"]
 
@@ -82,7 +84,7 @@ class DependencyContainer:
             else:
                 self._instances["chunking_service"] = SimpleChunkingAdapter(
                     chunk_size=self.config["chunk_size"],
-                    chunk_overlap=self.config["chunk_overlap"],
+                    overlap=self.config["chunk_overlap"],
                 )
         return self._instances["chunking_service"]
 
@@ -125,7 +127,9 @@ class WebSearchQASystem:
     def _get_default_config(self) -> dict:
         """기본 설정."""
         return {
-            "llm_model": "meta-llama/Llama-2-7b-chat-hf",
+            "llm_model": "qwen3:4b",
+            "embedding_model": "bge-large:335m",
+            "vllm_base_url": "http://localhost:11434/v1",
             "search_provider": "tavily",  # "tavily" or "google"
             "tavily_api_key": os.getenv("TAVILY_API_KEY", ""),
             "google_api_key": os.getenv("GOOGLE_API_KEY", ""),
@@ -191,7 +195,9 @@ async def main():
     """메인 실행 함수."""
     # 설정 로드 (환경 변수 또는 설정 파일에서)
     config = {
-        "llm_model": os.getenv("LLM_MODEL", "meta-llama/Llama-2-7b-chat-hf"),
+        "llm_model": os.getenv("LLM_MODEL", "qwen3:4b"),
+        "embedding_model": os.getenv("EMBEDDING_MODEL", "bge-large:335m"),
+        "vllm_base_url": os.getenv("VLLM_BASE_URL", "http://localhost:11434/v1"),
         "search_provider": os.getenv("SEARCH_PROVIDER", "tavily"),
         "tavily_api_key": os.getenv("TAVILY_API_KEY", ""),
         "vector_dimension": 768,

@@ -7,6 +7,7 @@ requires-python = ">=3.11"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+
 dependencies = [
     "beautifulsoup4>=4.13.4",
     "faiss-cpu>=1.12.0",

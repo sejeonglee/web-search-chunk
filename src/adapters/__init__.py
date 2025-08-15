@@ -1,19 +1,23 @@
 """Adapters for external services."""
 
-from .llm_client import LLMClient, VLLMClient
-from .web_search_adapter import WebSearchAdapter, TavilySearchAdapter
-from .crawling_adapter import CrawlingAdapter, PlaywrightCrawler
-from .vector_db_adapter import VectorDBAdapter, FAISSAdapter
-from .permanent_db_adapter import PermanentDBAdapter
+from .llm_adapter import VLLMAdapter
+from .web_search_adapter import TavilySearchAdapter, GoogleSearchAdapter
+from .crawling_adapter import PlaywrightCrawler
+from .vector_store_adapter import FAISSVectorStore
+from .persistent_store_adapter import QdrantPersistentStore
+from .chunking_adapter import SimpleChunkingAdapter, ContextualChunkingAdapter
+from .retrieval_adapter import HybridRetrievalAdapter
+from .reranking_adapter import CrossEncoderRerankingAdapter
 
 __all__ = [
-    "LLMClient",
-    "VLLMClient",
-    "WebSearchAdapter",
+    "VLLMAdapter",
     "TavilySearchAdapter",
-    "CrawlingAdapter",
+    "GoogleSearchAdapter",
     "PlaywrightCrawler",
-    "VectorDBAdapter",
-    "FAISSAdapter",
-    "PermanentDBAdapter",
+    "FAISSVectorStore",
+    "QdrantPersistentStore",
+    "SimpleChunkingAdapter",
+    "ContextualChunkingAdapter",
+    "HybridRetrievalAdapter",
+    "CrossEncoderRerankingAdapter",
 ]

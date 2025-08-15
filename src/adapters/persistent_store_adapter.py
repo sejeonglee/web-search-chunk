@@ -8,7 +8,12 @@ class QdrantPersistentStore(IPersistentStore):
     """Qdrant 영구 저장소 어댑터 - IPersistentStore 구현."""
 
     def __init__(self, path: str = "./qdrant_db"):
-        self.client = QdrantClient(path=path)
+        # Docker compose로 실행되는 Qdrant에 연결
+        try:
+            self.client = QdrantClient(host="localhost", port=6333)
+        except:
+            # 로컬 파일 기반 fallback
+            self.client = QdrantClient(path=path)
         self.collection_name = "semantic_chunks"
         self._init_collection()
 

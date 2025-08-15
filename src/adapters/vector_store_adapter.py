@@ -28,8 +28,15 @@ class FAISSVectorStore(IVectorStore):
         self, query_embedding: List[float], k: int = 10
     ) -> List[Dict[str, Any]]:
         """유사도 기반 검색."""
+        if not self.chunks:
+            return []
+            
         query_vector = np.array([query_embedding], dtype=np.float32)
-        distances, indices = self.index.search(query_vector, min(k, len(self.chunks)))
+        actual_k = min(k, len(self.chunks))
+        if actual_k <= 0:
+            return []
+            
+        distances, indices = self.index.search(query_vector, actual_k)
 
         results = []
         for i, idx in enumerate(indices[0]):
