@@ -14,10 +14,10 @@ class VLLMAdapter(ILLMService):
     """VLLM 서빙 LLM 어댑터 - ILLMService 구현."""
 
     def __init__(
-        self, 
-        model_name: str = "qwen3:4b",
+        self,
+        model_name: str = "Qwen/Qwen3-4B-Instruct-2507-FP8",
         embedding_model: str = "bge-large:335m",
-        base_url: str = "http://localhost:8000/v1"
+        base_url: str = "http://localhost:8000/v1",
     ):
         self.model_name = model_name
         self.embedding_model = embedding_model
@@ -40,35 +40,36 @@ class VLLMAdapter(ILLMService):
         try:
             response = await self._call_vllm(prompt)
             # 응답에서 쿼리 추출
-            lines = response.strip().split('\n')
+            lines = response.strip().split("\n")
             processed_queries = []
             for line in lines:
                 if line.strip() and any(line.startswith(f"{i}.") for i in range(1, 10)):
-                    query = line.split('.', 1)[1].strip()
+                    query = line.split(".", 1)[1].strip()
                     if query:
                         processed_queries.append(query)
-            
+
             # 최소 1개 쿼리는 보장
             if not processed_queries:
                 processed_queries = [user_query]
-                
+
             logger.info(f"✅ {len(processed_queries)}개 검색 쿼리 생성 완료")
-            return [SearchQuery(
-                original_query=user_query,
-                processed_queries=processed_queries[:3]  # 최대 3개
-            )]
-            
+            return [
+                SearchQuery(
+                    original_query=user_query,
+                    processed_queries=processed_queries[:3],  # 최대 3개
+                )
+            ]
+
         except Exception as e:
             logger.error(f"❌ 쿼리 생성 실패: {str(e)}")
             # 에러 시 기본 쿼리 반환
-            return [SearchQuery(
-                original_query=user_query,
-                processed_queries=[user_query]
-            )]
+            return [
+                SearchQuery(original_query=user_query, processed_queries=[user_query])
+            ]
 
     async def generate_answer(self, query: str, context: str) -> str:
         """답변 생성 구현."""
-        logger.debug(f"💭 답변 생성 시작: {query}")
+
         prompt = f"""다음 컨텍스트를 바탕으로 사용자 질문에 대해 정확하고 유용한 답변을 제공해주세요.
 
 컨텍스트:
@@ -85,6 +86,7 @@ class VLLMAdapter(ILLMService):
 답변:"""
 
         try:
+            logger.debug(f"💭 답변 생성 시작: {prompt}")
             answer = await self._call_vllm(prompt)
             logger.info(f"✅ 답변 생성 완료: {len(answer)}자")
             return answer
@@ -97,29 +99,88 @@ class VLLMAdapter(ILLMService):
         try:
             payload = {
                 "model": self.model_name,
-                "messages": [
-                    {"role": "user", "content": prompt}
-                ],
+                "messages": [{"role": "user", "content": prompt}],
                 "stream": False,
                 "temperature": 0.1,
-                "max_tokens": 1024
+                "max_tokens": 1024,
             }
-            
+
             logger.debug(f"📡 LLM API 호출: {self.base_url}")
             response = await self.client.post(
                 f"{self.base_url}/chat/completions",
                 json=payload,
-                headers={"Content-Type": "application/json"}
+                headers={"Content-Type": "application/json"},
             )
             response.raise_for_status()
-            
+
             result = response.json()
-            logger.debug(f"📥 LLM 응답 수신: {len(result['choices'][0]['message']['content'])}자")
+            logger.debug(
+                f"📥 LLM 응답 수신: {len(result['choices'][0]['message']['content'])}자"
+            )
             return result["choices"][0]["message"]["content"]
-            
+
         except Exception as e:
             logger.error(f"❌ VLLM API 호출 실패: {str(e)}")
             raise Exception(f"VLLM API 호출 실패: {str(e)}")
+
+    async def batch_generate(self, prompts: List[str]) -> List[str]:
+        """VLLM batch inference를 사용한 배치 생성."""
+        logger.debug(f"🔄 배치 생성 시작: {len(prompts)}개 프롬프트")
+        try:
+            # VLLM batch inference API 사용
+            batch_payload = {
+                "model": self.model_name,
+                "messages": [
+                    [{"role": "user", "content": prompt}] for prompt in prompts
+                ],
+                "temperature": 0.1,
+                "max_tokens": 1024,
+                "stream": False,
+            }
+
+            logger.debug(f"📡 배치 LLM API 호출: {self.base_url}")
+            response = await self.client.post(
+                f"{self.base_url}/v1/batch/completions",
+                json=batch_payload,
+                headers={"Content-Type": "application/json"},
+            )
+            response.raise_for_status()
+
+            result = response.json()
+            responses = []
+
+            # 각 응답 추출
+            for i, choice_data in enumerate(result.get("choices", [])):
+                if "message" in choice_data and "content" in choice_data["message"]:
+                    responses.append(choice_data["message"]["content"])
+                else:
+                    logger.warning(f"  배치 응답 {i + 1} 파싱 실패")
+                    responses.append("")
+
+            logger.info(f"✅ 배치 생성 완료: {len(responses)}개 응답")
+            return responses
+
+        except Exception as e:
+            logger.warning(f"⚠️ 배치 API 실패, 개별 처리로 폴백: {str(e)}")
+            # 배치 API가 실패하면 개별 처리로 폴백
+            return await self._fallback_individual_generate(prompts)
+
+    async def _fallback_individual_generate(self, prompts: List[str]) -> List[str]:
+        """배치 API 실패시 개별 처리 폴백."""
+        import asyncio
+
+        tasks = [self._call_vllm(prompt) for prompt in prompts]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        responses = []
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                logger.error(f"  프롬프트 {i + 1} 개별 처리 실패: {str(result)}")
+                responses.append("")
+            else:
+                responses.append(result)
+
+        return responses
 
     async def get_embeddings(self, texts: List[str]) -> List[List[float]]:
         """텍스트 임베딩 생성 (VLLM 임베딩 서빙)."""
@@ -127,25 +188,22 @@ class VLLMAdapter(ILLMService):
         try:
             embeddings = []
             for i, text in enumerate(texts):
-                payload = {
-                    "model": self.embedding_model,
-                    "input": text
-                }
-                
+                payload = {"model": self.embedding_model, "input": text}
+
                 response = await self.client.post(
                     f"{self.base_url}/embeddings",
                     json=payload,
-                    headers={"Content-Type": "application/json"}
+                    headers={"Content-Type": "application/json"},
                 )
                 response.raise_for_status()
-                
+
                 result = response.json()
                 embeddings.append(result["data"][0]["embedding"])
-                logger.debug(f"  텍스트 {i+1}/{len(texts)} 임베딩 완료")
-                
+                logger.debug(f"  텍스트 {i + 1}/{len(texts)} 임베딩 완료")
+
             logger.info(f"✅ 총 {len(embeddings)}개 임베딩 생성 완료")
             return embeddings
-            
+
         except Exception as e:
             logger.error(f"❌ 임베딩 생성 실패: {str(e)}")
             raise Exception(f"임베딩 생성 실패: {str(e)}")

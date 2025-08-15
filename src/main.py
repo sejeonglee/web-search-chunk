@@ -80,6 +80,7 @@ class DependencyContainer:
                 self._instances["chunking_service"] = ContextualChunkingAdapter(
                     llm_service=self.get_llm_service(),
                     chunk_size=self.config["chunk_size"],
+                    overlap=self.config["chunk_overlap"],
                 )
             else:
                 self._instances["chunking_service"] = SimpleChunkingAdapter(
@@ -128,9 +129,9 @@ class WebSearchQASystem:
     def _get_default_config(self) -> dict:
         """기본 설정."""
         return {
-            "llm_model": "qwen3:4b",
+            "llm_model": "Qwen/Qwen3-4B-Instruct-2507-FP8",
             "embedding_model": "bge-large:335m",
-            "vllm_base_url": "http://localhost:11434/v1",
+            "vllm_base_url": "http://localhost:8000/v1",
             "search_provider": "tavily",  # "tavily" or "google"
             "tavily_api_key": os.getenv("TAVILY_API_KEY", ""),
             "google_api_key": os.getenv("GOOGLE_API_KEY", ""),
@@ -138,7 +139,7 @@ class WebSearchQASystem:
             "vector_dimension": 1024,  # bge-large:335m은 1024차원
             "chunk_size": 1000,
             "chunk_overlap": 200,
-            "chunking_strategy": "simple",  # "simple" or "contextual"
+            "chunking_strategy": "contextual",  # "simple" or "contextual"
             "max_processing_time": 10.0,
             "qdrant_path": "./qdrant_db",
         }
@@ -208,15 +209,15 @@ async def main():
     """메인 실행 함수."""
     # 설정 로드 (환경 변수 또는 설정 파일에서)
     config = {
-        "llm_model": os.getenv("LLM_MODEL", "qwen3:4b"),
+        "llm_model": os.getenv("LLM_MODEL", "Qwen/Qwen3-4B-Instruct-2507-FP8"),
         "embedding_model": os.getenv("EMBEDDING_MODEL", "bge-large:335m"),
-        "vllm_base_url": os.getenv("VLLM_BASE_URL", "http://localhost:11434/v1"),
+        "vllm_base_url": os.getenv("VLLM_BASE_URL", "http://localhost:8000/v1"),
         "search_provider": os.getenv("SEARCH_PROVIDER", "tavily"),
         "tavily_api_key": os.getenv("TAVILY_API_KEY", ""),
         "vector_dimension": 1024,  # bge-large:335m은 1024차원
         "chunk_size": 1000,
         "chunk_overlap": 200,
-        "chunking_strategy": "simple",
+        "chunking_strategy": "contextual",
         "max_processing_time": 10.0,
         "qdrant_path": os.getenv("QDRANT_PATH", "./qdrant_db"),
     }
