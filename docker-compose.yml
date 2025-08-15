@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  websearch-qa:
+    build: .
+    environment:
+      - TAVILY_API_KEY=${TAVILY_API_KEY}
+      - VLLM_MODEL_PATH=/models
+    volumes:
+      - ./qdrant_db:/app/qdrant_db
+      - ./models:/models
+    ports:
+      - "8000:8000"
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  qdrant:
+    image: qdrant/qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - ./qdrant_data:/qdrant/storage
+
