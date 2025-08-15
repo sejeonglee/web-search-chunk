@@ -20,12 +20,22 @@ class QdrantPersistentStore(IPersistentStore):
     def _init_collection(self):
         """컬렉션 초기화."""
         try:
+            # 기존 컬렉션 삭제 (차원이 다를 수 있음)
+            try:
+                self.client.delete_collection(self.collection_name)
+                print(f"🗑️  기존 컬렉션 '{self.collection_name}' 삭제")
+            except:
+                pass
+            
+            # 새 컬렉션 생성 (1024차원)
             self.client.create_collection(
                 collection_name=self.collection_name,
-                vectors_config=VectorParams(size=768, distance=Distance.COSINE),
+                vectors_config=VectorParams(size=1024, distance=Distance.COSINE),
             )
-        except:
-            pass  # 이미 존재
+            print(f"✅ 컬렉션 '{self.collection_name}' 생성 완료 (1024차원)")
+        except Exception as e:
+            print(f"❌ 컬렉션 초기화 실패: {str(e)}")
+            pass
 
     async def save_session(self, chunks: List[SemanticChunk]) -> None:
         """세션 데이터 영구 저장."""

@@ -3,7 +3,11 @@
 import asyncio
 import os
 from datetime import datetime
+from dotenv import load_dotenv
 from src.main import WebSearchQASystem
+
+# .env 파일 로드
+load_dotenv()
 
 
 async def run_e2e_test():
@@ -18,7 +22,7 @@ async def run_e2e_test():
         "vllm_base_url": "http://localhost:11434/v1",
         "search_provider": "tavily",
         "tavily_api_key": os.getenv("TAVILY_API_KEY", ""),
-        "vector_dimension": 768,
+        "vector_dimension": 1024,  # bge-large:335m은 1024차원
         "chunk_size": 1000,
         "chunk_overlap": 200,
         "chunking_strategy": "simple",

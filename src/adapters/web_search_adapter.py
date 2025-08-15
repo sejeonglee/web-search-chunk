@@ -1,6 +1,9 @@
 from typing import List
 import httpx
 from src.core.models import WebDocument, IWebSearchService
+from src.utils.logger import setup_logger
+
+logger = setup_logger(__name__)
 
 
 class TavilySearchAdapter(IWebSearchService):
@@ -13,19 +16,42 @@ class TavilySearchAdapter(IWebSearchService):
     async def search(self, query: str, max_results: int = 7) -> List[WebDocument]:
         """Tavily API를 사용한 검색."""
         async with httpx.AsyncClient() as client:
+            payload = {
+                "api_key": self.api_key,
+                "query": query,
+                "search_depth": "basic",
+                "include_answer": False,
+                "include_images": False,
+                "include_raw_content": False,
+                "max_results": max_results
+            }
+            
+            logger.debug(f"🔍 Tavily 검색 요청: {query}")
+            
             response = await client.post(
                 self.base_url,
-                json={"query": query, "max_results": max_results},
-                headers={"api-key": self.api_key},
+                json=payload,
+                headers={"Content-Type": "application/json"},
             )
+            
+            logger.debug(f"📡 Tavily 응답 상태: {response.status_code}")
+            response_data = response.json()
+            logger.debug(f"📄 Tavily 응답 데이터: {response_data}")
+            
+            response.raise_for_status()
+            
             # 응답 파싱
             results = []
-            for item in response.json().get("results", [])[:max_results]:
+            tavily_results = response_data.get("results", [])
+            logger.info(f"📊 Tavily 검색 결과: {len(tavily_results)}개 문서 발견")
+            
+            for i, item in enumerate(tavily_results[:max_results]):
+                logger.debug(f"  결과 {i+1}: {item.get('title', 'No Title')}")
                 results.append(
                     WebDocument(
                         url=item["url"],
-                        title=item.get("title"),
-                        snippet=item.get("snippet"),
+                        title=item.get("title", "No Title"),
+                        snippet=item.get("content", "No Content"),
                         search_query=query,
                     )
                 )

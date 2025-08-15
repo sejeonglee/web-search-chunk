@@ -113,7 +113,7 @@ async def run_e2e_test_mock():
         "vllm_base_url": "http://localhost:11434/v1",
         "search_provider": "tavily",
         "tavily_api_key": "mock_key",  # Mock API 키
-        "vector_dimension": 768,
+        "vector_dimension": 1024,  # bge-large:335m은 1024차원
         "chunk_size": 1000,
         "chunk_overlap": 200,
         "chunking_strategy": "simple",

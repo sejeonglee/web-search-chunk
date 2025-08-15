@@ -92,7 +92,8 @@ class DependencyContainer:
         """검색 서비스 인스턴스 반환."""
         if "retrieval_service" not in self._instances:
             self._instances["retrieval_service"] = HybridRetrievalAdapter(
-                vector_store=self.get_vector_store()
+                vector_store=self.get_vector_store(),
+                llm_service=self.get_llm_service()
             )
         return self._instances["retrieval_service"]
 
@@ -134,7 +135,7 @@ class WebSearchQASystem:
             "tavily_api_key": os.getenv("TAVILY_API_KEY", ""),
             "google_api_key": os.getenv("GOOGLE_API_KEY", ""),
             "google_cx": os.getenv("GOOGLE_CX", ""),
-            "vector_dimension": 768,
+            "vector_dimension": 1024,  # bge-large:335m은 1024차원
             "chunk_size": 1000,
             "chunk_overlap": 200,
             "chunking_strategy": "simple",  # "simple" or "contextual"
@@ -169,6 +170,9 @@ class WebSearchQASystem:
                 "partial_response": None,
             }
         except Exception as e:
+            print(f"❌ 처리 중 오류 발생: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return {"success": False, "error": str(e), "partial_response": None}
 
     async def _load_session_data(self):
@@ -186,9 +190,18 @@ class WebSearchQASystem:
             vector_store = self.container.get_vector_store()
             # FAISSVectorStore의 chunks 속성 접근
             if hasattr(vector_store, "chunks"):
-                await self.persistent_store.save_session(vector_store.chunks)
+                print(f"💾 Vector store에 있는 chunks 개수: {len(vector_store.chunks)}")
+                if vector_store.chunks:
+                    await self.persistent_store.save_session(vector_store.chunks)
+                    print(f"✅ {len(vector_store.chunks)}개 chunk를 Qdrant에 저장했습니다.")
+                else:
+                    print("⚠️  Vector store에 저장된 chunks가 없습니다.")
+            else:
+                print("❌ Vector store에 chunks 속성이 없습니다.")
         except Exception as e:
             print(f"Failed to save session: {e}")
+            import traceback
+            traceback.print_exc()
 
 
 async def main():
@@ -200,7 +213,7 @@ async def main():
         "vllm_base_url": os.getenv("VLLM_BASE_URL", "http://localhost:11434/v1"),
         "search_provider": os.getenv("SEARCH_PROVIDER", "tavily"),
         "tavily_api_key": os.getenv("TAVILY_API_KEY", ""),
-        "vector_dimension": 768,
+        "vector_dimension": 1024,  # bge-large:335m은 1024차원
         "chunk_size": 1000,
         "chunk_overlap": 200,
         "chunking_strategy": "simple",

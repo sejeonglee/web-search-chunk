@@ -5,14 +5,23 @@ from src.core.models import SemanticChunk, IRetrievalService, IVectorStore
 class HybridRetrievalAdapter(IRetrievalService):
     """하이브리드 검색 어댑터 - IRetrievalService 구현."""
 
-    def __init__(self, vector_store: IVectorStore, embedder=None):
+    def __init__(self, vector_store: IVectorStore, llm_service=None):
         self.vector_store = vector_store
-        self.embedder = embedder  # 임베딩 모델
+        self.llm_service = llm_service  # LLM 서비스 (임베딩 생성용)
 
     async def retrieve(self, query: str, k: int = 20) -> List[SemanticChunk]:
         """하이브리드 검색 수행."""
-        # 1. 임베딩 생성 (실제로는 임베딩 모델 사용)
-        query_embedding = [0.1] * 768  # 더미 구현
+        # 1. 임베딩 생성
+        if self.llm_service:
+            try:
+                embeddings = await self.llm_service.get_embeddings([query])
+                query_embedding = embeddings[0]
+                print(f"🔮 쿼리 임베딩 생성 완료: {len(query_embedding)}차원")
+            except Exception as e:
+                print(f"❌ 쿼리 임베딩 생성 실패: {str(e)}")
+                query_embedding = [0.1] * 1024  # 더미 임베딩 (1024차원)
+        else:
+            query_embedding = [0.1] * 1024  # 더미 임베딩 (1024차원)
 
         # 2. 벡터 검색
         vector_results = await self.vector_store.search(query_embedding, k)

@@ -5,6 +5,9 @@ from typing import List
 import httpx
 import json
 from src.core.models import SearchQuery, ILLMService
+from src.utils.logger import setup_logger
+
+logger = setup_logger(__name__)
 
 
 class VLLMAdapter(ILLMService):
@@ -23,6 +26,7 @@ class VLLMAdapter(ILLMService):
 
     async def generate_queries(self, user_query: str) -> List[SearchQuery]:
         """멀티 쿼리 생성 구현."""
+        logger.debug(f"🤖 LLM 쿼리 생성 시작: {user_query}")
         prompt = f"""다음 사용자 질문을 분석하여 웹 검색에 적합한 3개의 다양한 검색 쿼리를 생성해주세요.
 원본 질문: {user_query}
 
@@ -48,12 +52,14 @@ class VLLMAdapter(ILLMService):
             if not processed_queries:
                 processed_queries = [user_query]
                 
+            logger.info(f"✅ {len(processed_queries)}개 검색 쿼리 생성 완료")
             return [SearchQuery(
                 original_query=user_query,
                 processed_queries=processed_queries[:3]  # 최대 3개
             )]
             
         except Exception as e:
+            logger.error(f"❌ 쿼리 생성 실패: {str(e)}")
             # 에러 시 기본 쿼리 반환
             return [SearchQuery(
                 original_query=user_query,
@@ -62,6 +68,7 @@ class VLLMAdapter(ILLMService):
 
     async def generate_answer(self, query: str, context: str) -> str:
         """답변 생성 구현."""
+        logger.debug(f"💭 답변 생성 시작: {query}")
         prompt = f"""다음 컨텍스트를 바탕으로 사용자 질문에 대해 정확하고 유용한 답변을 제공해주세요.
 
 컨텍스트:
@@ -78,8 +85,11 @@ class VLLMAdapter(ILLMService):
 답변:"""
 
         try:
-            return await self._call_vllm(prompt)
+            answer = await self._call_vllm(prompt)
+            logger.info(f"✅ 답변 생성 완료: {len(answer)}자")
+            return answer
         except Exception as e:
+            logger.error(f"❌ 답변 생성 실패: {str(e)}")
             return f"죄송합니다. 답변 생성 중 오류가 발생했습니다: {str(e)}"
 
     async def _call_vllm(self, prompt: str) -> str:
@@ -95,6 +105,7 @@ class VLLMAdapter(ILLMService):
                 "max_tokens": 1024
             }
             
+            logger.debug(f"📡 LLM API 호출: {self.base_url}")
             response = await self.client.post(
                 f"{self.base_url}/chat/completions",
                 json=payload,
@@ -103,16 +114,19 @@ class VLLMAdapter(ILLMService):
             response.raise_for_status()
             
             result = response.json()
+            logger.debug(f"📥 LLM 응답 수신: {len(result['choices'][0]['message']['content'])}자")
             return result["choices"][0]["message"]["content"]
             
         except Exception as e:
+            logger.error(f"❌ VLLM API 호출 실패: {str(e)}")
             raise Exception(f"VLLM API 호출 실패: {str(e)}")
 
     async def get_embeddings(self, texts: List[str]) -> List[List[float]]:
         """텍스트 임베딩 생성 (VLLM 임베딩 서빙)."""
+        logger.debug(f"🔮 임베딩 생성 시작: {len(texts)}개 텍스트")
         try:
             embeddings = []
-            for text in texts:
+            for i, text in enumerate(texts):
                 payload = {
                     "model": self.embedding_model,
                     "input": text
@@ -127,10 +141,13 @@ class VLLMAdapter(ILLMService):
                 
                 result = response.json()
                 embeddings.append(result["data"][0]["embedding"])
+                logger.debug(f"  텍스트 {i+1}/{len(texts)} 임베딩 완료")
                 
+            logger.info(f"✅ 총 {len(embeddings)}개 임베딩 생성 완료")
             return embeddings
             
         except Exception as e:
+            logger.error(f"❌ 임베딩 생성 실패: {str(e)}")
             raise Exception(f"임베딩 생성 실패: {str(e)}")
 
     async def __aenter__(self):

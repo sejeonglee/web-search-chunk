@@ -18,6 +18,9 @@ from .models import (
     IRetrievalService,
     IRerankingService,
 )
+from ..utils.logger import setup_logger
+
+logger = setup_logger(__name__)
 
 
 class PipelineState(TypedDict):
@@ -89,38 +92,99 @@ class QAPipeline:
 
     async def search_web(self, state: PipelineState) -> PipelineState:
         """웹 검색 (병렬 처리)."""
+        logger.info(f"🔍 검색 쿼리 개수: {len(state['search_queries'])}")
         tasks = [
             self.search_service.search(query.processed_queries[0], max_results=7)
             for query in state["search_queries"]
         ]
-        results = await asyncio.gather(*tasks)
-        state["web_documents"] = [doc for docs in results for doc in docs]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        all_documents = []
+        for i, result in enumerate(results):
+            if isinstance(result, list):
+                logger.info(f"  쿼리 {i+1}: {len(result)}개 문서 발견")
+                all_documents.extend(result)
+            elif isinstance(result, Exception):
+                logger.error(f"  쿼리 {i+1} 검색 실패: {str(result)}")
+        
+        logger.info(f"📑 총 {len(all_documents)}개 웹 문서 발견")
+        state["web_documents"] = all_documents
         return state
 
     async def crawl_documents(self, state: PipelineState) -> PipelineState:
         """문서 크롤링 (병렬 처리)."""
         unique_urls = list({doc.url for doc in state["web_documents"]})
+        logger.info(f"🕷️  크롤링할 URL 개수: {len(unique_urls)}")
+        
+        if not unique_urls:
+            logger.warning("⚠️  크롤링할 URL이 없습니다.")
+            state["document_contents"] = []
+            return state
+            
         tasks = [self.crawling_service.crawl(url) for url in unique_urls[:10]]
         contents = await asyncio.gather(*tasks, return_exceptions=True)
-        state["document_contents"] = [
-            c for c in contents if isinstance(c, WebDocumentContent)
-        ]
+        
+        successful_contents = []
+        for i, content in enumerate(contents):
+            if isinstance(content, WebDocumentContent):
+                logger.debug(f"  ✅ URL {i+1} 크롤링 성공: {unique_urls[i]}")
+                successful_contents.append(content)
+            else:
+                logger.error(f"  ❌ URL {i+1} 크롤링 실패: {unique_urls[i]} - {str(content)}")
+        
+        state["document_contents"] = successful_contents
+        logger.info(f"📄 성공적으로 크롤링된 문서: {len(successful_contents)}개")
         return state
 
     async def chunk_documents(self, state: PipelineState) -> PipelineState:
         """문서 청킹 (배치 처리)."""
         all_chunks = []
-        for content in state["document_contents"]:
+        logger.info(f"📄 크롤링된 문서 개수: {len(state['document_contents'])}")
+        for i, content in enumerate(state["document_contents"]):
+            logger.debug(f"🔧 문서 {i+1} 청킹 중: {content.url}")
             chunks = await self.chunking_service.chunk_document(
                 content, state["user_query"]
             )
+            logger.debug(f"  -> {len(chunks)}개 chunk 생성")
             all_chunks.extend(chunks)
         state["chunks"] = all_chunks
+        logger.info(f"📊 총 {len(all_chunks)}개 chunk 생성 완료")
         return state
 
     async def store_vectors(self, state: PipelineState) -> PipelineState:
-        """벡터 저장."""
-        await self.vector_store.add_chunks(state["chunks"])
+        """벡터 저장 (임베딩 생성 포함)."""
+        chunks = state["chunks"]
+        logger.info(f"🔢 생성된 chunks 개수: {len(chunks)}")
+        
+        if not chunks:
+            logger.warning("⚠️  저장할 chunks가 없습니다.")
+            return state
+            
+        # 임베딩이 없는 chunks에 임베딩 생성
+        chunks_without_embedding = [chunk for chunk in chunks if not chunk.embedding]
+        if chunks_without_embedding:
+            logger.info(f"🔮 {len(chunks_without_embedding)}개 chunk에 임베딩 생성 중...")
+            texts = [chunk.content for chunk in chunks_without_embedding]
+            
+            try:
+                embeddings = await self.llm_service.get_embeddings(texts)
+                for chunk, embedding in zip(chunks_without_embedding, embeddings):
+                    chunk.embedding = embedding
+                logger.info("✅ 임베딩 생성 완료")
+            except Exception as e:
+                logger.error(f"❌ 임베딩 생성 실패: {str(e)}")
+                # 임베딩 없이도 저장할 수 있도록 임시 임베딩 생성
+                for chunk in chunks_without_embedding:
+                    chunk.embedding = [0.0] * 1024  # 임시 더미 임베딩 (bge-large:335m 차원)
+                logger.warning("⚠️  더미 임베딩으로 대체했습니다.")
+        
+        if chunks:
+            logger.debug(f"📝 첫 번째 chunk ID: {chunks[0].chunk_id}")
+            logger.debug(f"📄 첫 번째 chunk 내용: {chunks[0].content[:100]}...")
+            logger.debug(f"🔮 첫 번째 chunk 임베딩 길이: {len(chunks[0].embedding) if chunks[0].embedding else 0}")
+            
+        await self.vector_store.add_chunks(chunks)
+        logger.info(f"💾 Vector store에 {len(chunks)}개 chunk 저장 완료")
         return state
 
     async def retrieve_chunks(self, state: PipelineState) -> PipelineState:
