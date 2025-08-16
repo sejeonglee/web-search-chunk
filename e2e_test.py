@@ -17,15 +17,16 @@ async def run_e2e_test():
 
     # 설정
     config = {
-        "llm_model": "qwen3:4b",
+        "llm_model": "Qwen/Qwen3-4B-Instruct-2507-FP8",
         "embedding_model": "bge-large:335m",
-        "vllm_base_url": "http://localhost:11434/v1",
+        "vllm_base_url": "http://localhost:8000/v1",
+        "embedding_base_url": "http://localhost:11434/v1/",
         "search_provider": "tavily",
         "tavily_api_key": os.getenv("TAVILY_API_KEY", ""),
         "vector_dimension": 1024,  # bge-large:335m은 1024차원
         "chunk_size": 1000,
         "chunk_overlap": 200,
-        "chunking_strategy": "simple",
+        "chunking_strategy": "contextual",
         "max_processing_time": 300.0,  # E2E 테스트는 더 긴 시간 허용
         "qdrant_path": "./qdrant_db",
     }

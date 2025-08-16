@@ -18,10 +18,12 @@ class VLLMAdapter(ILLMService):
         model_name: str = "Qwen/Qwen3-4B-Instruct-2507-FP8",
         embedding_model: str = "bge-large:335m",
         base_url: str = "http://localhost:8000/v1",
+        embedding_base_url: str = "http://localhost:11434/v1/",
     ):
         self.model_name = model_name
         self.embedding_model = embedding_model
         self.base_url = base_url
+        self.embedding_base_url = embedding_base_url
         self.client = httpx.AsyncClient(timeout=30.0)
 
     async def generate_queries(self, user_query: str) -> List[SearchQuery]:
@@ -140,7 +142,7 @@ class VLLMAdapter(ILLMService):
 
             logger.debug(f"📡 배치 LLM API 호출: {self.base_url}")
             response = await self.client.post(
-                f"{self.base_url}/v1/batch/completions",
+                f"{self.base_url}/batch/completions",
                 json=batch_payload,
                 headers={"Content-Type": "application/json"},
             )
@@ -191,7 +193,7 @@ class VLLMAdapter(ILLMService):
                 payload = {"model": self.embedding_model, "input": text}
 
                 response = await self.client.post(
-                    f"{self.base_url}/embeddings",
+                    f"{self.embedding_base_url}/embeddings",
                     json=payload,
                     headers={"Content-Type": "application/json"},
                 )
