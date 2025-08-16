@@ -18,7 +18,7 @@ class VLLMAdapter(ILLMService):
         model_name: str = "Qwen/Qwen3-4B-Instruct-2507-FP8",
         embedding_model: str = "bge-large:335m",
         base_url: str = "http://localhost:8000/v1",
-        embedding_base_url: str = "http://localhost:11434/v1/",
+        embedding_base_url: str = "http://localhost:11434/v1",
     ):
         self.model_name = model_name
         self.embedding_model = embedding_model
@@ -124,7 +124,6 @@ class VLLMAdapter(ILLMService):
         except Exception as e:
             logger.error(f"❌ VLLM API 호출 실패: {str(e)}")
             raise Exception(f"VLLM API 호출 실패: {str(e)}")
-
 
     async def get_embeddings(self, texts: List[str]) -> List[List[float]]:
         """텍스트 임베딩 생성 (VLLM 임베딩 서빙)."""

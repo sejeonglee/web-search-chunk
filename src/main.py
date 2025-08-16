@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import uuid
 from typing import Optional
 from datetime import datetime
 
@@ -23,8 +24,9 @@ from .adapters.reranking_adapter import CrossEncoderRerankingAdapter
 class DependencyContainer:
     """의존성 컨테이너 - 구체적인 구현체를 생성하고 주입."""
 
-    def __init__(self, config: dict):
+    def __init__(self, config: dict, session_id: str):
         self.config = config
+        self.session_id = session_id
         self._instances = {}
 
     def get_llm_service(self):
@@ -69,7 +71,8 @@ class DependencyContainer:
         """영구 저장소 인스턴스 반환."""
         if "persistent_store" not in self._instances:
             self._instances["persistent_store"] = QdrantPersistentStore(
-                path=self.config["qdrant_path"]
+                path=self.config["qdrant_path"],
+                session_id=self.session_id
             )
         return self._instances["persistent_store"]
 
@@ -120,9 +123,10 @@ class DependencyContainer:
 class WebSearchQASystem:
     """웹 검색 QA 시스템 - 최상위 조립."""
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: Optional[dict] = None, session_id: Optional[str] = None):
         self.config = config or self._get_default_config()
-        self.container = DependencyContainer(self.config)
+        self.session_id = session_id or str(uuid.uuid4())
+        self.container = DependencyContainer(self.config, self.session_id)
         self.pipeline = self.container.build_pipeline()
         self.persistent_store = self.container.get_persistent_store()
 
@@ -182,6 +186,7 @@ class WebSearchQASystem:
             chunks = await self.persistent_store.load_session()
             if chunks:
                 await self.container.get_vector_store().add_chunks(chunks)
+                print(f"🔄 세션 '{self.session_id}'에서 {len(chunks)}개 기존 청크를 로드했습니다.")
         except:
             pass  # 첫 실행 시 무시
 
@@ -194,7 +199,7 @@ class WebSearchQASystem:
                 print(f"💾 Vector store에 있는 chunks 개수: {len(vector_store.chunks)}")
                 if vector_store.chunks:
                     await self.persistent_store.save_session(vector_store.chunks)
-                    print(f"✅ {len(vector_store.chunks)}개 chunk를 Qdrant에 저장했습니다.")
+                    print(f"✅ 세션 '{self.session_id}'에 {len(vector_store.chunks)}개 chunk를 저장했습니다.")
                 else:
                     print("⚠️  Vector store에 저장된 chunks가 없습니다.")
             else:
@@ -224,6 +229,7 @@ async def main():
 
     # 시스템 초기화
     system = WebSearchQASystem(config)
+    print(f"🔑 세션 ID: {system.session_id}")
 
     # 예제 쿼리 처리
     queries = ["최근 AI 기술 동향은?", "2024년 한국 경제 전망", "기후 변화 대응 방안"]

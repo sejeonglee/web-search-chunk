@@ -137,16 +137,31 @@ class QAPipeline:
         return state
 
     async def chunk_documents(self, state: PipelineState) -> PipelineState:
-        """문서 청킹 (배치 처리)."""
+        """문서 청킹 (병렬 처리)."""
+        document_contents = state["document_contents"]
+        logger.info(f"📄 크롤링된 문서 개수: {len(document_contents)}")
+        
+        if not document_contents:
+            logger.warning("⚠️  청킹할 문서가 없습니다.")
+            state["chunks"] = []
+            return state
+        
+        # 각 문서에 대해 병렬로 청킹 작업 수행
+        tasks = [
+            self.chunking_service.chunk_document(content, state["user_query"])
+            for content in document_contents
+        ]
+        
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
         all_chunks = []
-        logger.info(f"📄 크롤링된 문서 개수: {len(state['document_contents'])}")
-        for i, content in enumerate(state["document_contents"]):
-            logger.debug(f"🔧 문서 {i+1} 청킹 중: {content.url}")
-            chunks = await self.chunking_service.chunk_document(
-                content, state["user_query"]
-            )
-            logger.debug(f"  -> {len(chunks)}개 chunk 생성")
-            all_chunks.extend(chunks)
+        for i, result in enumerate(results):
+            if isinstance(result, list):
+                logger.debug(f"  ✅ 문서 {i+1} 청킹 성공: {len(result)}개 chunk 생성")
+                all_chunks.extend(result)
+            elif isinstance(result, Exception):
+                logger.error(f"  ❌ 문서 {i+1} 청킹 실패: {str(result)}")
+        
         state["chunks"] = all_chunks
         logger.info(f"📊 총 {len(all_chunks)}개 chunk 생성 완료")
         return state
