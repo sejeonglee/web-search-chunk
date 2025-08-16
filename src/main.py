@@ -71,8 +71,9 @@ class DependencyContainer:
         """영구 저장소 인스턴스 반환."""
         if "persistent_store" not in self._instances:
             self._instances["persistent_store"] = QdrantPersistentStore(
-                path=self.config["qdrant_path"],
-                session_id=self.session_id
+                session_id=self.session_id,
+                host=self.config.get("qdrant_host", "localhost"),
+                port=self.config.get("qdrant_port", 6333)
             )
         return self._instances["persistent_store"]
 
@@ -145,7 +146,8 @@ class WebSearchQASystem:
             "chunk_overlap": 200,
             "chunking_strategy": "contextual",  # "simple" or "contextual"
             "max_processing_time": 10.0,
-            "qdrant_path": "./qdrant_db",
+            "qdrant_host": "localhost",
+            "qdrant_port": 6333,
         }
 
     async def process_query(self, query: str) -> dict:
@@ -224,7 +226,8 @@ async def main():
         "chunk_overlap": 200,
         "chunking_strategy": "contextual",
         "max_processing_time": 10.0,
-        "qdrant_path": os.getenv("QDRANT_PATH", "./qdrant_db"),
+        "qdrant_host": os.getenv("QDRANT_HOST", "localhost"),
+        "qdrant_port": int(os.getenv("QDRANT_PORT", "6333")),
     }
 
     # 시스템 초기화

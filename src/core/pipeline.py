@@ -137,7 +137,7 @@ class QAPipeline:
         return state
 
     async def chunk_documents(self, state: PipelineState) -> PipelineState:
-        """문서 청킹 (병렬 처리)."""
+        """문서 청킹 (제한된 병렬 처리 - 환경변수로 동시 실행 수 조절)."""
         document_contents = state["document_contents"]
         logger.info(f"📄 크롤링된 문서 개수: {len(document_contents)}")
         
@@ -146,12 +146,21 @@ class QAPipeline:
             state["chunks"] = []
             return state
         
-        # 각 문서에 대해 병렬로 청킹 작업 수행
-        tasks = [
-            self.chunking_service.chunk_document(content, state["user_query"])
-            for content in document_contents
-        ]
+        # 환경변수에서 동시 실행 수 가져오기 (기본값: 2)
+        import os
+        max_concurrent_chunks = int(os.getenv("MAX_CONCURRENT_CHUNKS", "2"))
+        logger.info(f"🔧 최대 동시 청킹 문서 수: {max_concurrent_chunks}개")
         
+        # Semaphore로 동시 실행 수 제한
+        semaphore = asyncio.Semaphore(max_concurrent_chunks)
+        
+        async def limited_chunk_document(content):
+            async with semaphore:
+                logger.debug(f"🔧 문서 청킹 시작: {content.url}")
+                return await self.chunking_service.chunk_document(content, state["user_query"])
+        
+        # 제한된 병렬로 청킹 작업 수행
+        tasks = [limited_chunk_document(content) for content in document_contents]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
         all_chunks = []

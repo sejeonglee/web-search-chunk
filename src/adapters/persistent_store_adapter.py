@@ -7,13 +7,14 @@ from src.core.models import SemanticChunk, IPersistentStore
 class QdrantPersistentStore(IPersistentStore):
     """Qdrant 영구 저장소 어댑터 - IPersistentStore 구현."""
 
-    def __init__(self, path: str = "./qdrant_db", session_id: str = "default"):
-        # Docker compose로 실행되는 Qdrant에 연결
+    def __init__(self, session_id: str = "default", host: str = "localhost", port: int = 6333):
+        # Docker 또는 외부 Qdrant 서버에 연결
         try:
-            self.client = QdrantClient(host="localhost", port=6333)
-        except:
-            # 로컬 파일 기반 fallback
-            self.client = QdrantClient(path=path)
+            self.client = QdrantClient(host=host, port=port)
+            print(f"✅ Qdrant 서버 연결 성공: {host}:{port}")
+        except Exception as e:
+            print(f"❌ Qdrant 서버 연결 실패: {str(e)}")
+            raise Exception(f"Qdrant 서버에 연결할 수 없습니다: {host}:{port}")
         self.collection_name = f"session_{session_id}"
         self._init_collection()
 

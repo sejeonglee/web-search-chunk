@@ -28,7 +28,8 @@ async def run_e2e_test():
         "chunk_overlap": 200,
         "chunking_strategy": "contextual",
         "max_processing_time": 300.0,  # E2E 테스트는 더 긴 시간 허용
-        "qdrant_path": "./qdrant_db",
+        "qdrant_host": "localhost",
+        "qdrant_port": 6333,
     }
 
     # 시스템 초기화
