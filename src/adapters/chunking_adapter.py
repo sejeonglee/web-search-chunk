@@ -35,7 +35,12 @@ class SimpleChunkingAdapter(IChunkingService):
                     chunk_id=chunk_id,
                     content=chunk_text,
                     source_url=document.url,
-                    metadata={"position": i, "query": query},
+                    metadata={
+                        "position": i, 
+                        "query": query,
+                        "parent_document_id": document.document_id,  # 부모 문서 ID
+                        "updated_at": document.crawl_datetime.isoformat()  # 크롤링 시점
+                    },
                 )
             )
 
@@ -65,7 +70,7 @@ class ContextualChunkingAdapter(IChunkingService):
             
         # 2단계: 각 청크에 컨텍스트 추가 (LLM 사용)
         contextual_chunks = await self._add_context_to_chunks(
-            raw_chunks, document.content, query
+            raw_chunks, document.content, query, document
         )
         
         logger.info(f"✅ Contextual 청킹 완료: {len(contextual_chunks)}개")
@@ -88,7 +93,7 @@ class ContextualChunkingAdapter(IChunkingService):
                 
         return chunks
     
-    async def _add_context_to_chunks(self, raw_chunks: List[dict], full_document: str, query: str) -> List[SemanticChunk]:
+    async def _add_context_to_chunks(self, raw_chunks: List[dict], full_document: str, query: str, document: WebDocumentContent) -> List[SemanticChunk]:
         """각 청크에 컨텍스트 추가 (VLLM batch inference 사용)."""
         logger.debug(f"🤖 {len(raw_chunks)}개 청크에 VLLM 배치로 컨텍스트 추가 중...")
         
@@ -143,7 +148,9 @@ class ContextualChunkingAdapter(IChunkingService):
                         'position': chunk_data['position'],
                         'query': query,
                         'original_content': chunk_data['text'],  # 원본 컨텐츠도 저장
-                        'contextual_retrieval': True
+                        'contextual_retrieval': True,
+                        'parent_document_id': document.document_id,  # 부모 문서 ID
+                        'updated_at': document.crawl_datetime.isoformat()  # 크롤링 시점
                     }
                 )
             )
