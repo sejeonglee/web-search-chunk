@@ -99,18 +99,24 @@ class ContextualChunkingAdapter(IChunkingService):
             prompts.append(prompt)
         
         try:
-            # VLLM batch inference 사용
-            logger.info(f"📦 VLLM 배치 추론 시작: {len(prompts)}개 프롬프트")
-            contextual_responses = await self.llm_service.batch_generate(prompts)
+            # 개별 LLM 호출을 병렬로 처리
+            import asyncio
+            logger.info(f"📦 LLM 개별 추론 시작: {len(prompts)}개 프롬프트")
+            tasks = [self.llm_service.generate_answer("", prompt) for prompt in prompts]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
             
-            # 응답이 부족한 경우 빈 문자열로 채움
-            while len(contextual_responses) < len(raw_chunks):
-                contextual_responses.append("")
+            contextual_responses = []
+            for result in results:
+                if isinstance(result, Exception):
+                    logger.warning(f"개별 LLM 호출 실패: {str(result)}")
+                    contextual_responses.append("")
+                else:
+                    contextual_responses.append(result)
                 
-            logger.info(f"✅ VLLM 배치 추론 완료: {len(contextual_responses)}개 응답")
+            logger.info(f"✅ LLM 개별 추론 완료: {len(contextual_responses)}개 응답")
             
         except Exception as e:
-            logger.error(f"❌ VLLM 배치 추론 실패: {str(e)}")
+            logger.error(f"❌ LLM 추론 실패: {str(e)}")
             # 폴백: 원본 청크들을 그대로 사용
             contextual_responses = [chunk['text'] for chunk in raw_chunks]
         

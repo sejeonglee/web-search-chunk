@@ -87,19 +87,6 @@ class ILLMService(ABC):
         """임베딩 생성."""
         pass
 
-    async def batch_generate(self, prompts: List[str]) -> List[str]:
-        """배치 생성 (기본 구현: 개별 처리)."""
-        import asyncio
-        tasks = [self.generate_answer("", prompt) for prompt in prompts]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        responses = []
-        for result in results:
-            if isinstance(result, Exception):
-                responses.append("")
-            else:
-                responses.append(result)
-        return responses
 
 
 class IWebSearchService(ABC):

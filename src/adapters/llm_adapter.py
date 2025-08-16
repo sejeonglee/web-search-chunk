@@ -125,64 +125,6 @@ class VLLMAdapter(ILLMService):
             logger.error(f"❌ VLLM API 호출 실패: {str(e)}")
             raise Exception(f"VLLM API 호출 실패: {str(e)}")
 
-    async def batch_generate(self, prompts: List[str]) -> List[str]:
-        """VLLM batch inference를 사용한 배치 생성."""
-        logger.debug(f"🔄 배치 생성 시작: {len(prompts)}개 프롬프트")
-        try:
-            # VLLM batch inference API 사용
-            batch_payload = {
-                "model": self.model_name,
-                "messages": [
-                    [{"role": "user", "content": prompt}] for prompt in prompts
-                ],
-                "temperature": 0.1,
-                "max_tokens": 1024,
-                "stream": False,
-            }
-
-            logger.debug(f"📡 배치 LLM API 호출: {self.base_url}")
-            response = await self.client.post(
-                f"{self.base_url}/batch/completions",
-                json=batch_payload,
-                headers={"Content-Type": "application/json"},
-            )
-            response.raise_for_status()
-
-            result = response.json()
-            responses = []
-
-            # 각 응답 추출
-            for i, choice_data in enumerate(result.get("choices", [])):
-                if "message" in choice_data and "content" in choice_data["message"]:
-                    responses.append(choice_data["message"]["content"])
-                else:
-                    logger.warning(f"  배치 응답 {i + 1} 파싱 실패")
-                    responses.append("")
-
-            logger.info(f"✅ 배치 생성 완료: {len(responses)}개 응답")
-            return responses
-
-        except Exception as e:
-            logger.warning(f"⚠️ 배치 API 실패, 개별 처리로 폴백: {str(e)}")
-            # 배치 API가 실패하면 개별 처리로 폴백
-            return await self._fallback_individual_generate(prompts)
-
-    async def _fallback_individual_generate(self, prompts: List[str]) -> List[str]:
-        """배치 API 실패시 개별 처리 폴백."""
-        import asyncio
-
-        tasks = [self._call_vllm(prompt) for prompt in prompts]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        responses = []
-        for i, result in enumerate(results):
-            if isinstance(result, Exception):
-                logger.error(f"  프롬프트 {i + 1} 개별 처리 실패: {str(result)}")
-                responses.append("")
-            else:
-                responses.append(result)
-
-        return responses
 
     async def get_embeddings(self, texts: List[str]) -> List[List[float]]:
         """텍스트 임베딩 생성 (VLLM 임베딩 서빙)."""
